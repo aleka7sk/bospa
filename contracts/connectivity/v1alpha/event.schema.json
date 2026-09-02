@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bospa.kz/contracts/connectivity/v1alpha/event.schema.json",
+  "title": "bospa Connectivity Event v1alpha",
+  "type": "object",
+  "required": ["specVersion", "eventId", "eventType", "provider", "source", "occurredAt", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "specVersion": {"const": "connectivity.bospa.kz/v1alpha"},
+    "eventId": {"type": "string", "minLength": 1},
+    "eventType": {
+      "enum": [
+        "reservation.requested",
+        "reservation.updated",
+        "reservation.confirmed",
+        "reservation.cancelled",
+        "reservation.deleted"
+      ]
+    },
+    "provider": {"type": "string", "minLength": 1},
+    "source": {"type": "string", "minLength": 1},
+    "occurredAt": {"type": "string", "format": "date-time"},
+    "payload": {
+      "type": "object",
+      "required": ["externalReservationId", "externalPropertyId", "checkIn", "checkOut", "guest"],
+      "additionalProperties": true,
+      "properties": {
+        "externalReservationId": {"type": "string", "minLength": 1},
+        "externalPropertyId": {"type": "string", "minLength": 1},
+        "externalUnitId": {"type": ["string", "null"]},
+        "checkIn": {"type": "string", "format": "date"},
+        "checkOut": {"type": "string", "format": "date"},
+        "checkInTime": {"type": "string", "pattern": "^[0-2][0-9]:[0-5][0-9]$"},
+        "checkOutTime": {"type": "string", "pattern": "^[0-2][0-9]:[0-5][0-9]$"},
+        "status": {"type": ["string", "null"]},
+        "guest": {
+          "type": "object",
+          "required": ["phone"],
+          "additionalProperties": false,
+          "properties": {
+            "phone": {"type": "string", "minLength": 5},
+            "name": {"type": ["string", "null"]}
+          }
+        },
+        "amount": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "currency": {"type": "string", "minLength": 3, "maxLength": 3},
+            "total": {"type": "integer", "minimum": 0, "description": "Minor currency units"}
+          },
+          "required": ["currency", "total"]
+        },
+        "rawReference": {"type": ["string", "null"]}
+      }
+    }
+  }
+}
