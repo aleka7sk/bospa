@@ -1,0 +1,27 @@
+{
+  "specVersion": "connectivity.bospa.kz/v1alpha",
+  "eventId": "evt_booking_request_0001",
+  "eventType": "reservation.requested",
+  "provider": "mock-connectivity",
+  "source": "Booking",
+  "occurredAt": "2026-09-02T10:00:00.000Z",
+  "payload": {
+    "externalReservationId": "booking-request-0001",
+    "externalPropertyId": "booking-property-01",
+    "externalUnitId": "booking-unit-07",
+    "checkIn": "2026-09-10",
+    "checkOut": "2026-09-13",
+    "checkInTime": "14:00",
+    "checkOutTime": "12:00",
+    "status": "request",
+    "guest": {
+      "phone": "+77001112233",
+      "name": "Тестовый гость"
+    },
+    "amount": {
+      "currency": "KZT",
+      "total": 7800000
+    },
+    "rawReference": null
+  }
+}
