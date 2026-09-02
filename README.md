@@ -2,7 +2,7 @@
 
 **bospa** — mobile-first PWA-календарь для команд посуточной аренды квартир в Казахстане. Приложение собрано по `PRD v0.10` и `Mobile Calendar & Application Card UX Specification v0.2`.
 
-> Текущая ветка — функциональный продуктовый прототип. Он полностью запускается без внешнего API и хранит демо-данные в браузере. Реальная авторизация, multi-tenant backend, платежи, object storage и Connectivity-партнёр требуют отдельного production-этапа.
+> Текущая ветка — функциональный продуктовый прототип. Он запускается без внешнего API и хранит демо-данные в браузере. Реальная авторизация, multi-tenant backend, платежи, object storage и Connectivity-партнёр требуют отдельного production-этапа.
 
 ## Что работает
 
@@ -16,7 +16,7 @@
 - Test Center для имитации раннего Booking-события;
 - quick bottom sheet и полноэкранная карточка заявки;
 - звонок, WhatsApp, результаты контакта, комментарии и pinned note;
-- платежи, предоплата, остаток, депозит, возвратная модель в store;
+- платежи, предоплата, остаток, депозит и возвратная модель в store;
 - сохранение проигравшей soft-заявки в состоянии «Нужна альтернатива»;
 - платный модуль каталога и публичный view-only preview;
 - персональная ссылка на подборку квартир на 24 часа;
@@ -24,19 +24,23 @@
 - owner analytics, manager «Мои заявки» и superadmin price book;
 - component billing, счета, team management, CSV templates и экспорт;
 - role switcher для owner / manager / platform superadmin;
-- PWA manifest, service worker, offline app shell и installable icons;
-- адаптивный UI для iPhone, Samsung, Xiaomi, Oppo и desktop.
+- PWA manifest, service worker и offline app shell;
+- адаптивный UI для современных iPhone, Samsung, Xiaomi, Oppo и desktop.
 
 ## Быстрый запуск
 
 Требуется Node.js 20+.
 
 ```bash
+git checkout feat/bospa-pwa-v1
+git pull
 npm ci
 npm run dev
 ```
 
 Откройте `http://localhost:4173`.
+
+`npm ci` может вывести `audited 1 package` — это нормально: прототип намеренно не использует внешние runtime-зависимости.
 
 Сборка статического PWA:
 
@@ -50,6 +54,18 @@ npm run preview
 ```bash
 npm run ci
 ```
+
+## Если после обновления виден пустой или старый экран
+
+Сначала остановите сервер и выполните чистый запуск:
+
+```bash
+rm -rf dist
+npm ci
+npm run dev
+```
+
+Затем откройте `http://localhost:4173` с hard reload. Если приложение уже устанавливалось как PWA, удалите старую установленную копию либо в DevTools откройте **Application → Service Workers → Unregister**, затем **Storage → Clear site data** и загрузите страницу снова. Service worker использует версионированный cache и network-first загрузку JS/CSS, поэтому после этой очистки старый bundle больше не должен оставаться активным.
 
 ## Демо-роли
 

@@ -1,0 +1,19 @@
+/* Keep the very wide virtual calendar inside its own scroller on mobile. */
+#app,
+.app-shell,
+.main-shell,
+.main-content {
+  min-width: 0;
+}
+
+#app,
+.main-shell,
+.main-content {
+  overflow-x: clip;
+}
+
+.calendar-shell,
+.calendar-scroll {
+  min-width: 0;
+  max-width: 100%;
+}
