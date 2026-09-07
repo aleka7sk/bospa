@@ -1,0 +1,483 @@
+openapi: 3.1.0
+info:
+  title: Bospa API
+  version: 0.1.0
+  description: |
+    Multi-tenant API for Bospa. Monetary values are integer tiyn.
+    Cookie-authenticated mutations require the X-CSRF-Token header.
+servers:
+  - url: http://localhost:4173/api/v1
+    description: Local Docker Compose through the web reverse proxy
+tags:
+  - name: Health
+  - name: Auth
+  - name: Apartments
+  - name: Applications
+paths:
+  /health/live:
+    get:
+      tags: [Health]
+      operationId: live
+      responses:
+        '200': {description: Process is alive}
+  /health/ready:
+    get:
+      tags: [Health]
+      operationId: ready
+      responses:
+        '200': {description: Database is reachable}
+        '500': {$ref: '#/components/responses/Error'}
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: {type: string, format: email}
+                password: {type: string, minLength: 12}
+      responses:
+        '200':
+          description: Authenticated; session and CSRF cookies are set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: {$ref: '#/components/schemas/User'}
+                  workspace: {$ref: '#/components/schemas/Workspace'}
+                  expiresAt: {type: string, format: date-time}
+                  csrfToken: {type: string}
+        '401': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+  /auth/session:
+    get:
+      tags: [Auth]
+      operationId: currentSession
+      security: [{cookieAuth: []}]
+      responses:
+        '200':
+          description: Current session
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: {$ref: '#/components/schemas/User'}
+                  workspace: {$ref: '#/components/schemas/Workspace'}
+                  expiresAt: {type: string, format: date-time}
+        '401': {$ref: '#/components/responses/Error'}
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      security: [{cookieAuth: [], csrfToken: []}]
+      responses:
+        '204': {description: Session revoked}
+        '401': {$ref: '#/components/responses/Error'}
+  /bootstrap:
+    get:
+      tags: [Auth]
+      operationId: bootstrap
+      security: [{cookieAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/From'}
+        - {$ref: '#/components/parameters/To'}
+      responses:
+        '200':
+          description: Workspace payload for the calendar shell
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: {$ref: '#/components/schemas/User'}
+                  workspace: {$ref: '#/components/schemas/Workspace'}
+                  apartments:
+                    type: array
+                    items: {$ref: '#/components/schemas/Apartment'}
+                  applications:
+                    type: array
+                    items: {$ref: '#/components/schemas/Application'}
+                  serverTime: {type: string, format: date-time}
+  /apartments:
+    get:
+      tags: [Apartments]
+      operationId: listApartments
+      security: [{cookieAuth: []}]
+      responses:
+        '200':
+          description: Apartments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: '#/components/schemas/Apartment'}
+    post:
+      tags: [Apartments]
+      operationId: createApartment
+      security: [{cookieAuth: [], csrfToken: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateApartment'}
+      responses:
+        '201':
+          description: Created apartment
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Apartment'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /applications:
+    get:
+      tags: [Applications]
+      operationId: listApplications
+      security: [{cookieAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/From'}
+        - {$ref: '#/components/parameters/To'}
+        - {name: status, in: query, schema: {$ref: '#/components/schemas/ApplicationStatus'}}
+        - {name: source, in: query, schema: {type: string}}
+        - {name: managerId, in: query, schema: {type: string, format: uuid}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 500, default: 250}}
+        - {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
+      responses:
+        '200':
+          description: Applications
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: '#/components/schemas/Application'}
+    post:
+      tags: [Applications]
+      operationId: createApplication
+      security: [{cookieAuth: [], csrfToken: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateApplication'}
+      responses:
+        '201':
+          description: Created application
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Application'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /applications/{id}:
+    parameters:
+      - {$ref: '#/components/parameters/ApplicationID'}
+    get:
+      tags: [Applications]
+      operationId: getApplication
+      security: [{cookieAuth: []}]
+      responses:
+        '200':
+          description: Full application card
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ApplicationDetail'}
+        '404': {$ref: '#/components/responses/Error'}
+    patch:
+      tags: [Applications]
+      operationId: updateApplication
+      security: [{cookieAuth: [], csrfToken: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateApplication'}
+      responses:
+        '200':
+          description: Updated application
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Application'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /applications/{id}/claim:
+    post:
+      tags: [Applications]
+      operationId: claimApplication
+      security: [{cookieAuth: [], csrfToken: []}]
+      parameters:
+        - {$ref: '#/components/parameters/ApplicationID'}
+      responses:
+        '200':
+          description: Claimed application
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Application'}
+        '409': {$ref: '#/components/responses/Error'}
+  /applications/{id}/status:
+    patch:
+      tags: [Applications]
+      operationId: updateApplicationStatus
+      security: [{cookieAuth: [], csrfToken: []}]
+      parameters:
+        - {$ref: '#/components/parameters/ApplicationID'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: {$ref: '#/components/schemas/ApplicationStatus'}
+                lockVersion: {type: integer, format: int64}
+      responses:
+        '200':
+          description: Updated application
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Application'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /applications/{id}/comments:
+    post:
+      tags: [Applications]
+      operationId: addApplicationComment
+      security: [{cookieAuth: [], csrfToken: []}]
+      parameters:
+        - {$ref: '#/components/parameters/ApplicationID'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: {type: string, minLength: 1, maxLength: 4000}
+      responses:
+        '201': {description: Comment created}
+  /applications/{id}/payments:
+    post:
+      tags: [Applications]
+      operationId: confirmApplicationPayment
+      security: [{cookieAuth: [], csrfToken: []}]
+      parameters:
+        - {$ref: '#/components/parameters/ApplicationID'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amountTiyn, kind, method]
+              properties:
+                amountTiyn: {type: integer, format: int64, minimum: 1}
+                kind: {type: string, enum: [rent, deposit]}
+                method: {type: string}
+                note: {type: string}
+                receivedAt: {type: string, format: date-time}
+      responses:
+        '201': {description: Payment confirmed}
+  /applications/{id}/refunds:
+    post:
+      tags: [Applications]
+      operationId: recordApplicationRefund
+      security: [{cookieAuth: [], csrfToken: []}]
+      parameters:
+        - {$ref: '#/components/parameters/ApplicationID'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amountTiyn, method, reason]
+              properties:
+                amountTiyn: {type: integer, format: int64, minimum: 1}
+                method: {type: string}
+                reason: {type: string}
+                receivedAt: {type: string, format: date-time}
+      responses:
+        '201': {description: Refund recorded}
+        '403': {$ref: '#/components/responses/Error'}
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: bospa_session
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+  parameters:
+    ApplicationID:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    From:
+      name: from
+      in: query
+      schema: {type: string, description: YYYY-MM-DD or RFC3339}
+    To:
+      name: to
+      in: query
+      schema: {type: string, description: YYYY-MM-DD or RFC3339}
+  responses:
+    Error:
+      description: API error
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/APIErrorEnvelope'}
+  schemas:
+    Role:
+      type: string
+      enum: [owner, manager, superadmin]
+    ApplicationStatus:
+      type: string
+      enum: [new, no_answer, thinking, awaiting_prepayment, prepaid, paid, completed, declined, unpaid, cancelled_client, cancelled_company, duplicate, error, technical]
+    Workspace:
+      type: object
+      required: [id, name, city, timezone, status]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        city: {type: string}
+        timezone: {type: string}
+        status: {type: string}
+    User:
+      type: object
+      required: [id, workspaceId, email, name, shortName, role, active]
+      properties:
+        id: {type: string, format: uuid}
+        workspaceId: {type: string, format: uuid}
+        email: {type: string, format: email}
+        name: {type: string}
+        shortName: {type: string}
+        role: {$ref: '#/components/schemas/Role'}
+        active: {type: boolean}
+        createdAt: {type: string, format: date-time}
+    Apartment:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        workspaceId: {type: string, format: uuid}
+        code: {type: string}
+        address: {type: string}
+        unit: {type: string}
+        city: {type: string}
+        district: {type: string}
+        complex: {type: string}
+        rooms: {type: integer}
+        capacity: {type: integer}
+        checkInTime: {type: string}
+        checkOutTime: {type: string}
+        weekdayRateTiyn: {type: integer, format: int64}
+        weekendRateTiyn: {type: integer, format: int64}
+        active: {type: boolean}
+        catalogEnabled: {type: boolean}
+        published: {type: boolean}
+        lockVersion: {type: integer, format: int64}
+    CreateApartment:
+      type: object
+      required: [code, address, unit, capacity]
+      properties:
+        code: {type: string}
+        address: {type: string}
+        unit: {type: string}
+        city: {type: string}
+        district: {type: string}
+        complex: {type: string}
+        rooms: {type: integer, minimum: 0}
+        capacity: {type: integer, minimum: 1}
+        checkInTime: {type: string, default: '14:00'}
+        checkOutTime: {type: string, default: '12:00'}
+        weekdayRateTiyn: {type: integer, format: int64, minimum: 0}
+        weekendRateTiyn: {type: integer, format: int64, minimum: 0}
+        catalogEnabled: {type: boolean}
+        published: {type: boolean}
+    Application:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        workspaceId: {type: string, format: uuid}
+        externalId: {type: string}
+        apartmentId: {type: string, format: uuid}
+        guestName: {type: string}
+        phone: {type: string}
+        source: {type: string}
+        status: {$ref: '#/components/schemas/ApplicationStatus'}
+        checkInAt: {type: string, format: date-time}
+        checkOutAt: {type: string, format: date-time}
+        totalAmountTiyn: {type: integer, format: int64}
+        requiredPrepaymentTiyn: {type: integer, format: int64}
+        paidAmountTiyn: {type: integer, format: int64}
+        depositAmountTiyn: {type: integer, format: int64}
+        claimedBy: {type: [string, 'null'], format: uuid}
+        creditedManagerId: {type: [string, 'null'], format: uuid}
+        isTest: {type: boolean}
+        needsAlternative: {type: boolean}
+        pinnedNote: {type: string}
+        lockVersion: {type: integer, format: int64}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    CreateApplication:
+      type: object
+      required: [apartmentId, phone, checkInAt, checkOutAt]
+      properties:
+        apartmentId: {type: string, format: uuid}
+        guestName: {type: string}
+        phone: {type: string}
+        source: {type: string, default: Ручная}
+        status: {$ref: '#/components/schemas/ApplicationStatus'}
+        checkInAt: {type: string, format: date-time}
+        checkOutAt: {type: string, format: date-time}
+        totalAmountTiyn: {type: integer, format: int64, minimum: 0}
+        requiredPrepaymentTiyn: {type: integer, format: int64, minimum: 0}
+        depositAmountTiyn: {type: integer, format: int64, minimum: 0}
+        pinnedNote: {type: string}
+        isTest: {type: boolean}
+        externalId: {type: string}
+        external: {type: boolean}
+    UpdateApplication:
+      type: object
+      properties:
+        guestName: {type: string}
+        phone: {type: string}
+        apartmentId: {type: string, format: uuid}
+        checkInAt: {type: string, format: date-time}
+        checkOutAt: {type: string, format: date-time}
+        totalAmountTiyn: {type: integer, format: int64, minimum: 0}
+        requiredPrepaymentTiyn: {type: integer, format: int64, minimum: 0}
+        depositAmountTiyn: {type: integer, format: int64, minimum: 0}
+        pinnedNote: {type: string}
+        lockVersion: {type: integer, format: int64}
+    ApplicationDetail:
+      type: object
+      properties:
+        application: {$ref: '#/components/schemas/Application'}
+        payments: {type: array, items: {type: object}}
+        comments: {type: array, items: {type: object}}
+        events: {type: array, items: {type: object}}
+    APIErrorEnvelope:
+      type: object
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code: {type: string}
+            message: {type: string}
+            requestId: {type: string}
