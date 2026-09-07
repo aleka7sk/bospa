@@ -178,7 +178,7 @@ func (s *Store) EnsureBootstrapOwner(ctx context.Context, cfg Config) error {
 	}
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO audit_log(workspace_id, actor_id, action, entity_type, entity_id, metadata)
-		VALUES ($1,$2,'workspace.bootstrap','workspace',$1,jsonb_build_object('email',$3))`,
+		VALUES ($1,$2,'workspace.bootstrap','workspace',$1::text,jsonb_build_object('email',$3))`,
 		workspaceID, userID, cfg.BootstrapEmail); err != nil {
 		return fmt.Errorf("audit bootstrap: %w", err)
 	}
