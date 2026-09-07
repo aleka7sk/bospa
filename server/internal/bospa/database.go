@@ -178,8 +178,8 @@ func (s *Store) EnsureBootstrapOwner(ctx context.Context, cfg Config) error {
 	}
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO audit_log(workspace_id, actor_id, action, entity_type, entity_id, metadata)
-		VALUES ($1,$2,'workspace.bootstrap','workspace',$1::text,jsonb_build_object('email',$3))`,
-		workspaceID, userID, cfg.BootstrapEmail); err != nil {
+		VALUES ($1::uuid,$2::uuid,'workspace.bootstrap','workspace',$4::text,jsonb_build_object('email',$3::text))`,
+		workspaceID, userID, cfg.BootstrapEmail, workspaceID); err != nil {
 		return fmt.Errorf("audit bootstrap: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
