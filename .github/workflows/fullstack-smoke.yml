@@ -38,7 +38,7 @@ jobs:
       BOSPA_BOOTSTRAP_OWNER_PASSWORD: bospa-ci-owner-2026!
       BOSPA_BOOTSTRAP_OWNER_NAME: CI Owner
       BOSPA_BOOTSTRAP_WORKSPACE: CI Workspace
-      BOSPA_API_ORIGIN: http://127.0.0.1:8080
+      BOSPA_API_UPSTREAM: http://127.0.0.1:8080
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -53,14 +53,18 @@ jobs:
         run: |
           npm ci --ignore-scripts
           npm run build
-          grep -q '__BOSPA_REMOTE_RUNTIME__' dist/assets/app.js
+          grep -q 'class BospaApiClient' dist/assets/app.js
+          if grep -q '__BOSPA_REMOTE_RUNTIME__' dist/assets/app.js; then
+            echo 'legacy remote runtime is still bundled' >&2
+            exit 1
+          fi
       - name: Start API and PWA proxy
         shell: bash
         run: |
           set -euo pipefail
           (cd server && go mod tidy && go run ./cmd/api) >/tmp/bospa-api.log 2>&1 &
           echo $! >/tmp/bospa-api.pid
-          node scripts/dev-server.mjs dist 4173 >/tmp/bospa-web.log 2>&1 &
+          BOSPA_API_UPSTREAM="$BOSPA_API_UPSTREAM" node scripts/dev-server.mjs dist 4173 >/tmp/bospa-web.log 2>&1 &
           echo $! >/tmp/bospa-web.pid
           for attempt in $(seq 1 60); do
             if curl -fsS http://localhost:4173/api/v1/health/ready >/dev/null; then exit 0; fi
@@ -74,7 +78,7 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsS http://localhost:4173/ | grep -q 'id="app"'
-          curl -fsS http://localhost:4173/assets/app.js | grep -q '__BOSPA_REMOTE_RUNTIME__'
+          curl -fsS http://localhost:4173/assets/app.js | grep -q 'class BospaApiClient'
           curl -fsS -c /tmp/cookies.txt \
             -H 'content-type: application/json' \
             -d '{"email":"owner@bospa.local","password":"bospa-ci-owner-2026!"}' \
@@ -83,6 +87,19 @@ jobs:
           import json
           value=json.load(open('/tmp/login.json'))
           assert value.get('csrfToken'), value
+          PY
+          curl -fsS -b /tmp/cookies.txt http://localhost:4173/api/v1/auth/session >/tmp/session.json
+          python - <<'PY'
+          import json
+          value=json.load(open('/tmp/session.json'))
+          assert value.get('user'), value
+          assert value.get('csrfToken'), value
+          PY
+          curl -fsS -b /tmp/cookies.txt http://localhost:4173/api/v1/auth/me >/tmp/me.json
+          python - <<'PY'
+          import json
+          value=json.load(open('/tmp/me.json'))
+          assert value.get('user'), value
           PY
           curl -fsS -b /tmp/cookies.txt http://localhost:4173/api/v1/bootstrap >/tmp/bootstrap.json
           python - <<'PY'

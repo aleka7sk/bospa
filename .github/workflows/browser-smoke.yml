@@ -42,7 +42,7 @@ jobs:
       BOSPA_BOOTSTRAP_OWNER_PASSWORD: bospa-ci-owner-2026!
       BOSPA_BOOTSTRAP_OWNER_NAME: Browser Owner
       BOSPA_BOOTSTRAP_WORKSPACE: Browser Workspace
-      BOSPA_API_ORIGIN: http://127.0.0.1:8080
+      BOSPA_API_UPSTREAM: http://127.0.0.1:8080
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -59,8 +59,13 @@ jobs:
           set -euo pipefail
           npm ci --ignore-scripts
           npm run build
+          grep -q 'class BospaApiClient' dist/assets/app.js
+          if grep -q '__BOSPA_REMOTE_RUNTIME__' dist/assets/app.js; then
+            echo 'legacy remote runtime is still bundled' >&2
+            exit 1
+          fi
           (cd server && go mod tidy && go run ./cmd/api) >/tmp/api.log 2>&1 & echo $! >/tmp/api.pid
-          node scripts/dev-server.mjs dist 4173 >/tmp/web.log 2>&1 & echo $! >/tmp/web.pid
+          BOSPA_API_UPSTREAM="$BOSPA_API_UPSTREAM" node scripts/dev-server.mjs dist 4173 >/tmp/web.log 2>&1 & echo $! >/tmp/web.pid
           for attempt in $(seq 1 60); do
             curl -fsS http://localhost:4173/api/v1/health/ready >/dev/null && exit 0
             sleep 1
@@ -74,9 +79,12 @@ jobs:
           test -n "$chrome"
           timeout 45s "$chrome" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage \
             --virtual-time-budget=7000 --dump-dom http://localhost:4173/ >/tmp/bospa-dom.html 2>/tmp/chrome.log
-          grep -q 'data-bospa-auth-gate' /tmp/bospa-dom.html
-          grep -q 'Войдите в календарь бронирований' /tmp/bospa-dom.html
-          test "$(grep -o 'data-bospa-remote-indicator' /tmp/bospa-dom.html | wc -l)" -le 2
+          grep -q 'class="auth-screen"' /tmp/bospa-dom.html
+          grep -q 'Войти в bospa' /tmp/bospa-dom.html
+          if grep -q 'Bospa API сейчас недоступен' /tmp/bospa-dom.html; then
+            echo 'healthy API was rendered as unavailable' >&2
+            exit 1
+          fi
       - name: Diagnostics
         if: failure()
         run: |
