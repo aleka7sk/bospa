@@ -46,6 +46,8 @@ func (api *API) Handler() http.Handler {
 
 	mux.Handle("POST /api/v1/auth/logout", api.auth(api.csrf(http.HandlerFunc(api.handleLogout))))
 	mux.Handle("GET /api/v1/auth/session", api.auth(http.HandlerFunc(api.handleSession)))
+	// Compatibility alias for previously cached PWA clients. New clients use /auth/session.
+	mux.Handle("GET /api/v1/auth/me", api.auth(http.HandlerFunc(api.handleSession)))
 	mux.Handle("GET /api/v1/bootstrap", api.auth(http.HandlerFunc(api.handleBootstrap)))
 	mux.Handle("GET /api/v1/apartments", api.auth(http.HandlerFunc(api.handleListApartments)))
 	mux.Handle("POST /api/v1/apartments", api.auth(api.csrf(api.requireRoles(RoleOwner, RoleSuperadmin)(http.HandlerFunc(api.handleCreateApartment)))))

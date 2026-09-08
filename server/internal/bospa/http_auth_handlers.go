@@ -92,10 +92,15 @@ func (api *API) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 func (api *API) handleSession(w http.ResponseWriter, r *http.Request) {
 	principal := mustPrincipal(r.Context())
+	csrfToken := ""
+	if cookie, err := r.Cookie(csrfCookieName); err == nil {
+		csrfToken = cookie.Value
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user":      principal.User,
 		"workspace": principal.Workspace,
 		"expiresAt": principal.ExpiresAt,
+		"csrfToken": csrfToken,
 	})
 }
 
