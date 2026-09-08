@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bospa.kz/contracts/connectivity/v1alpha/capabilities.schema.json",
+  "title": "bospa Connectivity Provider Capabilities v1alpha",
+  "type": "object",
+  "required": ["specVersion", "provider", "events", "guestPhone", "mode"],
+  "additionalProperties": false,
+  "properties": {
+    "specVersion": {"const": "connectivity.bospa.kz/v1alpha"},
+    "provider": {"type": "string", "minLength": 1},
+    "events": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "reservation.requested",
+          "reservation.updated",
+          "reservation.confirmed",
+          "reservation.cancelled",
+          "reservation.deleted"
+        ]
+      }
+    },
+    "guestPhone": {"enum": ["full", "conditional", "unavailable"]},
+    "mode": {"enum": ["mock", "webhook", "polling", "hybrid"]},
+    "supportsInitialBaseline": {"type": "boolean"},
+    "supportsAvailabilityWrite": {"type": "boolean"},
+    "supportsRatesWrite": {"type": "boolean"},
+    "notes": {"type": ["string", "null"]}
+  }
+}

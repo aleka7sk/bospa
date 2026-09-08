@@ -1,0 +1,132 @@
+name: ci
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+permissions:
+  contents: read
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run ci
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bospa-dist
+          path: dist
+
+  api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6-alpine
+        env:
+          POSTGRES_DB: bospa
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d bospa"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    defaults:
+      run:
+        working-directory: server
+    env:
+      BOSPA_DATABASE_URL: postgres://postgres:postgres@localhost:5432/bospa?sslmode=disable
+      BOSPA_PUBLIC_ORIGIN: http://localhost:4173
+      BOSPA_ALLOWED_ORIGINS: http://localhost:4173
+      BOSPA_COOKIE_SECURE: "false"
+      BOSPA_AUTO_MIGRATE: "true"
+      BOSPA_BOOTSTRAP_OWNER_EMAIL: owner@bospa.local
+      BOSPA_BOOTSTRAP_OWNER_PASSWORD: bospa-ci-owner-2026!
+      BOSPA_BOOTSTRAP_OWNER_NAME: CI Owner
+      BOSPA_BOOTSTRAP_WORKSPACE: CI Workspace
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.27.1
+          cache: false
+      - name: Resolve modules
+        run: go mod tidy
+      - name: Formatting
+        run: test -z "$(gofmt -l .)"
+      - name: Vet
+        run: go vet ./...
+      - name: Unit tests
+        run: go test -race -count=1 ./...
+      - name: Build API
+        run: go build -trimpath ./cmd/api
+      - name: API integration smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          go run ./cmd/api > /tmp/bospa-api.log 2>&1 &
+          api_pid=$!
+          trap 'kill $api_pid 2>/dev/null || true; cat /tmp/bospa-api.log' EXIT
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://localhost:8080/api/v1/health/ready >/dev/null; then break; fi
+            sleep 1
+          done
+
+          curl -fsS -c /tmp/cookies.txt \
+            -H 'content-type: application/json' \
+            -d '{"email":"owner@bospa.local","password":"bospa-ci-owner-2026!"}' \
+            http://localhost:8080/api/v1/auth/login > /tmp/login.json
+          csrf=$(python -c 'import json; print(json.load(open("/tmp/login.json"))["csrfToken"])')
+
+          curl -fsS -b /tmp/cookies.txt http://localhost:8080/api/v1/bootstrap > /tmp/bootstrap.json
+          python - <<'PY'
+          import json
+          payload = json.load(open('/tmp/bootstrap.json'))
+          assert payload['user']['email'] == 'owner@bospa.local'
+          assert len(payload['users']) >= 1
+          assert payload['users'][0]['workspaceId'] == payload['workspace']['id']
+          assert len(payload['apartments']) >= 1
+          PY
+          apartment=$(python -c 'import json; print(json.load(open("/tmp/bootstrap.json"))["apartments"][0]["id"])')
+
+          cat > /tmp/application.json <<JSON
+          {"apartmentId":"$apartment","guestName":"Integration Guest","phone":"+77000000000","source":"Ручная","status":"awaiting_prepayment","checkInAt":"2030-01-10T14:00:00Z","checkOutAt":"2030-01-12T12:00:00Z","totalAmountTiyn":2000000,"requiredPrepaymentTiyn":500000,"depositAmountTiyn":300000}
+          JSON
+          curl -fsS -b /tmp/cookies.txt -H "X-CSRF-Token: $csrf" -H 'content-type: application/json' \
+            --data-binary @/tmp/application.json http://localhost:8080/api/v1/applications > /tmp/application-created.json
+          application=$(python -c 'import json; print(json.load(open("/tmp/application-created.json"))["id"])')
+
+          curl -fsS -b /tmp/cookies.txt -H "X-CSRF-Token: $csrf" -H 'content-type: application/json' \
+            -d '{"outcome":"reached","note":"Guest confirmed dates"}' \
+            http://localhost:8080/api/v1/applications/$application/contacts > /tmp/contact.json
+          test "$(python -c 'import json; print(json.load(open("/tmp/contact.json"))["type"])')" = contact
+
+          curl -fsS -b /tmp/cookies.txt -H "X-CSRF-Token: $csrf" -H 'content-type: application/json' \
+            -d '{"amountTiyn":500000,"kind":"rent","method":"Kaspi","note":"CI smoke"}' \
+            http://localhost:8080/api/v1/applications/$application/payments > /tmp/payment.json
+          version=$(python -c 'import json; print(json.load(open("/tmp/payment.json"))["application"]["lockVersion"])')
+
+          curl -fsS -b /tmp/cookies.txt -H "X-CSRF-Token: $csrf" -H 'content-type: application/json' \
+            -X PATCH -d "{\"status\":\"prepaid\",\"lockVersion\":$version}" \
+            http://localhost:8080/api/v1/applications/$application/status > /tmp/status.json
+          test "$(python -c 'import json; print(json.load(open("/tmp/status.json"))["status"])')" = prepaid
+
+          curl -fsS -b /tmp/cookies.txt http://localhost:8080/api/v1/applications/$application > /tmp/detail.json
+          python - <<'PY'
+          import json
+          detail = json.load(open('/tmp/detail.json'))
+          assert detail['application']['status'] == 'prepaid'
+          assert any(event['type'] == 'contact' for event in detail['events'])
+          assert any(payment['amountTiyn'] == 500000 for payment in detail['payments'])
+          PY
+
+          kill $api_pid
+          wait $api_pid || true
+          trap - EXIT

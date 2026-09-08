@@ -1,0 +1,20 @@
+{
+  "name": "bospa",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "Mobile-first PWA calendar for short-term rental teams in Kazakhstan.",
+  "scripts": {
+    "dev": "npm run build && BOSPA_API_UPSTREAM=${BOSPA_API_UPSTREAM:-http://localhost:8080} node scripts/dev-server.mjs dist 4173",
+    "build": "node scripts/build.mjs",
+    "preview": "npm run build && BOSPA_API_UPSTREAM=${BOSPA_API_UPSTREAM:-http://localhost:8080} node scripts/dev-server.mjs dist 4173",
+    "check": "node scripts/check.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "ci": "npm run check && npm test && npm run build",
+    "dev:demo": "npm run build && BOSPA_API_UPSTREAM= node scripts/dev-server.mjs dist 4173",
+    "dev:full": "docker compose up --build"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

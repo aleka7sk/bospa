@@ -1,0 +1,17 @@
+{
+  "specVersion": "connectivity.bospa.kz/v1alpha",
+  "provider": "mock-connectivity",
+  "events": [
+    "reservation.requested",
+    "reservation.updated",
+    "reservation.confirmed",
+    "reservation.cancelled",
+    "reservation.deleted"
+  ],
+  "guestPhone": "full",
+  "mode": "mock",
+  "supportsInitialBaseline": false,
+  "supportsAvailabilityWrite": false,
+  "supportsRatesWrite": false,
+  "notes": "Local Test Center provider; no real external connectivity."
+}

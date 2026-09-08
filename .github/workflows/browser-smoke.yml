@@ -1,0 +1,99 @@
+name: browser-smoke
+on:
+  push:
+    branches: ["feat/bospa-pwa-v1"]
+    paths:
+      - "src/**"
+      - "scripts/**"
+      - "server/**"
+      - "index.html"
+      - ".github/workflows/browser-smoke.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "scripts/**"
+      - "server/**"
+      - "index.html"
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6-alpine
+        env:
+          POSTGRES_DB: bospa
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d bospa"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      BOSPA_DATABASE_URL: postgres://postgres:postgres@localhost:5432/bospa?sslmode=disable
+      BOSPA_PUBLIC_ORIGIN: http://localhost:4173
+      BOSPA_ALLOWED_ORIGINS: http://localhost:4173
+      BOSPA_COOKIE_SECURE: "false"
+      BOSPA_AUTO_MIGRATE: "true"
+      BOSPA_BOOTSTRAP_OWNER_EMAIL: owner@bospa.local
+      BOSPA_BOOTSTRAP_OWNER_PASSWORD: bospa-ci-owner-2026!
+      BOSPA_BOOTSTRAP_OWNER_NAME: Browser Owner
+      BOSPA_BOOTSTRAP_WORKSPACE: Browser Workspace
+      BOSPA_API_UPSTREAM: http://127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.27.1
+          cache: false
+      - name: Build and start stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts
+          npm run build
+          grep -q 'class BospaApiClient' dist/assets/app.js
+          if grep -q '__BOSPA_REMOTE_RUNTIME__' dist/assets/app.js; then
+            echo 'legacy remote runtime is still bundled' >&2
+            exit 1
+          fi
+          (cd server && go mod tidy && go run ./cmd/api) >/tmp/api.log 2>&1 & echo $! >/tmp/api.pid
+          BOSPA_API_UPSTREAM="$BOSPA_API_UPSTREAM" node scripts/dev-server.mjs dist 4173 >/tmp/web.log 2>&1 & echo $! >/tmp/web.pid
+          for attempt in $(seq 1 60); do
+            curl -fsS http://localhost:4173/api/v1/health/ready >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/api.log; cat /tmp/web.log; exit 1
+      - name: Render unauthenticated application in Chrome
+        shell: bash
+        run: |
+          set -euo pipefail
+          chrome="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          test -n "$chrome"
+          timeout 45s "$chrome" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage \
+            --virtual-time-budget=7000 --dump-dom http://localhost:4173/ >/tmp/bospa-dom.html 2>/tmp/chrome.log
+          grep -q 'class="auth-screen"' /tmp/bospa-dom.html
+          grep -q 'Войти в bospa' /tmp/bospa-dom.html
+          if grep -q 'Bospa API сейчас недоступен' /tmp/bospa-dom.html; then
+            echo 'healthy API was rendered as unavailable' >&2
+            exit 1
+          fi
+      - name: Diagnostics
+        if: failure()
+        run: |
+          cat /tmp/api.log 2>/dev/null || true
+          cat /tmp/web.log 2>/dev/null || true
+          cat /tmp/chrome.log 2>/dev/null || true
+          tail -200 /tmp/bospa-dom.html 2>/dev/null || true
+      - name: Stop stack
+        if: always()
+        run: |
+          kill "$(cat /tmp/web.pid 2>/dev/null)" 2>/dev/null || true
+          kill "$(cat /tmp/api.pid 2>/dev/null)" 2>/dev/null || true

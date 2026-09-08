@@ -1,0 +1,36 @@
+{
+  "name": "bospa — календарь бронирований",
+  "short_name": "bospa",
+  "description": "Календарь заявок, бронирований, оплат и квартир для команд посуточной аренды.",
+  "lang": "ru",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "any",
+  "background_color": "#071022",
+  "theme_color": "#071022",
+  "categories": ["business", "productivity", "finance"],
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Календарь",
+      "short_name": "Календарь",
+      "url": "/#calendar",
+      "icons": [{"src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml"}]
+    },
+    {
+      "name": "Новая заявка",
+      "short_name": "Новая",
+      "url": "/#new",
+      "icons": [{"src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml"}]
+    }
+  ]
+}
