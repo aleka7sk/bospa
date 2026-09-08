@@ -5,10 +5,11 @@
   const API_BASE = '/api/v1';
   const QUEUE_KEY = 'bospa-remote-mutation-queue-v1';
   const ID_MAP_KEY = 'bospa-remote-id-map-v1';
+  const mutationStorage = globalThis.sessionStorage || globalThis.localStorage;
   const runtime = {
     mode: 'detecting',
     csrfToken: '',
-    queue: safeJsonParse(localStorage.getItem(QUEUE_KEY), []),
+    queue: safeJsonParse(mutationStorage.getItem(QUEUE_KEY), []),
     idMap: safeJsonParse(localStorage.getItem(ID_MAP_KEY), {}),
     flushing: false,
     lastSyncAt: null,
@@ -194,7 +195,7 @@
   }
 
   function persistQueue() {
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(runtime.queue));
+    mutationStorage.setItem(QUEUE_KEY, JSON.stringify(runtime.queue));
     localStorage.setItem(ID_MAP_KEY, JSON.stringify(runtime.idMap));
     mountRemoteIndicator();
   }
@@ -408,6 +409,8 @@
     try { await apiRequest('/auth/logout', {method:'POST', body:{}}); } catch {}
     runtime.mode = 'auth-required';
     runtime.csrfToken = '';
+    runtime.queue = [];
+    mutationStorage.removeItem(QUEUE_KEY);
     renderAuthGate();
   }
 
