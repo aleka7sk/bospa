@@ -430,7 +430,9 @@
     }, true);
     window.addEventListener('online', () => { runtime.mode = runtime.mode === 'offline' ? 'remote' : runtime.mode; void flushQueue(); void refreshRemoteState({silent:true}); });
     window.addEventListener('offline', () => { if (runtime.mode === 'remote') runtime.mode = 'offline'; mountRemoteIndicator(); });
-    const observer = new MutationObserver(() => mountRemoteIndicator());
+    const observer = new MutationObserver(() => {
+      if (!document.querySelector('[data-bospa-remote-indicator]')) mountRemoteIndicator();
+    });
     observer.observe(document.documentElement, {subtree:true, childList:true});
   }
 
