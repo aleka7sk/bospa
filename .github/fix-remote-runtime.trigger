@@ -1,0 +1,1 @@
+fix observer loop
