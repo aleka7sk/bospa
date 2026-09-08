@@ -78,27 +78,55 @@ jobs:
             if curl -fsS http://localhost:8080/api/v1/health/ready >/dev/null; then break; fi
             sleep 1
           done
+
           curl -fsS -c /tmp/cookies.txt \
             -H 'content-type: application/json' \
             -d '{"email":"owner@bospa.local","password":"bospa-ci-owner-2026!"}' \
             http://localhost:8080/api/v1/auth/login > /tmp/login.json
           csrf=$(python -c 'import json; print(json.load(open("/tmp/login.json"))["csrfToken"])')
+
           curl -fsS -b /tmp/cookies.txt http://localhost:8080/api/v1/bootstrap > /tmp/bootstrap.json
+          python - <<'PY'
+          import json
+          payload = json.load(open('/tmp/bootstrap.json'))
+          assert payload['user']['email'] == 'owner@bospa.local'
+          assert len(payload['users']) >= 1
+          assert payload['users'][0]['workspaceId'] == payload['workspace']['id']
+          assert len(payload['apartments']) >= 1
+          PY
           apartment=$(python -c 'import json; print(json.load(open("/tmp/bootstrap.json"))["apartments"][0]["id"])')
+
           cat > /tmp/application.json <<JSON
           {"apartmentId":"$apartment","guestName":"Integration Guest","phone":"+77000000000","source":"Ручная","status":"awaiting_prepayment","checkInAt":"2030-01-10T14:00:00Z","checkOutAt":"2030-01-12T12:00:00Z","totalAmountTiyn":2000000,"requiredPrepaymentTiyn":500000,"depositAmountTiyn":300000}
           JSON
           curl -fsS -b /tmp/cookies.txt -H "X-CSRF-Token: $csrf" -H 'content-type: application/json' \
             --data-binary @/tmp/application.json http://localhost:8080/api/v1/applications > /tmp/application-created.json
           application=$(python -c 'import json; print(json.load(open("/tmp/application-created.json"))["id"])')
+
+          curl -fsS -b /tmp/cookies.txt -H "X-CSRF-Token: $csrf" -H 'content-type: application/json' \
+            -d '{"outcome":"reached","note":"Guest confirmed dates"}' \
+            http://localhost:8080/api/v1/applications/$application/contacts > /tmp/contact.json
+          test "$(python -c 'import json; print(json.load(open("/tmp/contact.json"))["type"])')" = contact
+
           curl -fsS -b /tmp/cookies.txt -H "X-CSRF-Token: $csrf" -H 'content-type: application/json' \
             -d '{"amountTiyn":500000,"kind":"rent","method":"Kaspi","note":"CI smoke"}' \
-            http://localhost:8080/api/v1/applications/$application/payments >/tmp/payment.json
+            http://localhost:8080/api/v1/applications/$application/payments > /tmp/payment.json
           version=$(python -c 'import json; print(json.load(open("/tmp/payment.json"))["application"]["lockVersion"])')
+
           curl -fsS -b /tmp/cookies.txt -H "X-CSRF-Token: $csrf" -H 'content-type: application/json' \
             -X PATCH -d "{\"status\":\"prepaid\",\"lockVersion\":$version}" \
-            http://localhost:8080/api/v1/applications/$application/status >/tmp/status.json
+            http://localhost:8080/api/v1/applications/$application/status > /tmp/status.json
           test "$(python -c 'import json; print(json.load(open("/tmp/status.json"))["status"])')" = prepaid
+
+          curl -fsS -b /tmp/cookies.txt http://localhost:8080/api/v1/applications/$application > /tmp/detail.json
+          python - <<'PY'
+          import json
+          detail = json.load(open('/tmp/detail.json'))
+          assert detail['application']['status'] == 'prepaid'
+          assert any(event['type'] == 'contact' for event in detail['events'])
+          assert any(payment['amountTiyn'] == 500000 for payment in detail['payments'])
+          PY
+
           kill $api_pid
           wait $api_pid || true
           trap - EXIT
