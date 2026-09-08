@@ -17,12 +17,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cp .github/workflows/ci.yml /tmp/bospa-ci.yml
           cat .github/bospa-update/part-* > /tmp/bospa-update.tar.gz.b64
           base64 --decode /tmp/bospa-update.tar.gz.b64 > /tmp/bospa-update.tar.gz
           tar -xzf /tmp/bospa-update.tar.gz
+          cp /tmp/bospa-ci.yml .github/workflows/ci.yml
           rm -rf .github/bospa-update
-          rm -f .github/workflows/apply-bospa-update.yml
-          rm -f .github/workflows/source-snapshot.yml
           git config user.name "bospa automation"
           git config user.email "94860628+aleka7sk@users.noreply.github.com"
           git add -A
