@@ -77,8 +77,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS http://localhost:4173/ | grep -q 'id="app"'
-          curl -fsS http://localhost:4173/assets/app.js | grep -q 'class BospaApiClient'
+          curl -fsS http://localhost:4173/ -o /tmp/index.html
+          grep -q 'id="app"' /tmp/index.html
+          curl -fsS http://localhost:4173/assets/app.js -o /tmp/app.js
+          grep -q 'class BospaApiClient' /tmp/app.js
           curl -fsS -c /tmp/cookies.txt \
             -H 'content-type: application/json' \
             -d '{"email":"owner@bospa.local","password":"bospa-ci-owner-2026!"}' \
