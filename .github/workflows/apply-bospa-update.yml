@@ -3,7 +3,7 @@ on:
   push:
     branches: ["feat/bospa-pwa-v1"]
     paths:
-      - .github/bospa-update.tar.gz.b64
+      - .github/bospa-update/READY
 permissions:
   contents: write
 jobs:
@@ -17,9 +17,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          base64 --decode .github/bospa-update.tar.gz.b64 > /tmp/bospa-update.tar.gz
+          cat .github/bospa-update/part-* > /tmp/bospa-update.tar.gz.b64
+          base64 --decode /tmp/bospa-update.tar.gz.b64 > /tmp/bospa-update.tar.gz
           tar -xzf /tmp/bospa-update.tar.gz
-          rm -f .github/bospa-update.tar.gz.b64
+          rm -rf .github/bospa-update
           rm -f .github/workflows/apply-bospa-update.yml
           rm -f .github/workflows/source-snapshot.yml
           git config user.name "bospa automation"
