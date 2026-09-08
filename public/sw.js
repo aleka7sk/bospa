@@ -1,4 +1,4 @@
-const CACHE = 'bospa-shell-v2';
+const CACHE = 'bospa-shell-v3';
 const SHELL = [
   '/',
   '/index.html',
@@ -28,6 +28,7 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith('/api/')) return;
 
   if (event.request.mode === 'navigate') {
     event.respondWith(

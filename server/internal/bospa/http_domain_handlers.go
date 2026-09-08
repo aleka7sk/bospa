@@ -126,6 +126,21 @@ type commentRequest struct {
 	Text string `json:"text"`
 }
 
+func (api *API) handleAddContact(w http.ResponseWriter, r *http.Request) {
+	principal := mustPrincipal(r.Context())
+	var input CreateContactInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		writeAPIError(w, r, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	event, err := api.store.AddContactEvent(r.Context(), *principal, r.PathValue("id"), input)
+	if err != nil {
+		api.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, event)
+}
+
 func (api *API) handleAddComment(w http.ResponseWriter, r *http.Request) {
 	principal := mustPrincipal(r.Context())
 	var input commentRequest

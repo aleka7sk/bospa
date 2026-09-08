@@ -10,6 +10,10 @@ import (
 )
 
 func (s *Store) Bootstrap(ctx context.Context, principal Principal, from, to time.Time) (Bootstrap, error) {
+	users, err := s.ListUsers(ctx, principal.WorkspaceID)
+	if err != nil {
+		return Bootstrap{}, err
+	}
 	apartments, err := s.ListApartments(ctx, principal.WorkspaceID)
 	if err != nil {
 		return Bootstrap{}, err
@@ -18,7 +22,14 @@ func (s *Store) Bootstrap(ctx context.Context, principal Principal, from, to tim
 	if err != nil {
 		return Bootstrap{}, err
 	}
-	return Bootstrap{User: principal.User, Workspace: principal.Workspace, Apartments: apartments, Applications: applications, ServerTime: time.Now().UTC()}, nil
+	return Bootstrap{
+		User:         principal.User,
+		Workspace:    principal.Workspace,
+		Users:        users,
+		Apartments:   apartments,
+		Applications: applications,
+		ServerTime:   time.Now().UTC(),
+	}, nil
 }
 
 func insertApplicationEvent(ctx context.Context, tx pgx.Tx, workspaceID, applicationID, eventType, text, actorID, actorName string, metadata map[string]any) error {

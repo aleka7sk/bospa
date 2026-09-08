@@ -10,7 +10,10 @@ function renderOverlay(overlay) {
   if (overlay.type === 'filters') return renderFiltersModal();
   if (overlay.type === 'contact') return renderContactModal(overlay.applicationId);
   if (overlay.type === 'payment') return renderPaymentModal(overlay.applicationId);
+  if (overlay.type === 'refund') return renderRefundModal(overlay.applicationId);
   if (overlay.type === 'note') return renderNoteModal(overlay.applicationId);
+  if (overlay.type === 'edit-guest') return renderEditGuestModal(overlay.applicationId);
+  if (overlay.type === 'edit-stay') return renderEditStayModal(overlay.applicationId);
   if (overlay.type === 'status') return renderStatusModal(overlay.applicationId);
   if (overlay.type === 'complete') return renderCompleteModal(overlay.applicationId);
   if (overlay.type === 'catalog-link') return renderCatalogLinkModal(overlay.applicationId);
@@ -21,6 +24,8 @@ function renderOverlay(overlay) {
   if (overlay.type === 'subscription') return renderSubscriptionModal();
   if (overlay.type === 'import') return renderImportModal();
   if (overlay.type === 'apartment') return renderApartmentModal(overlay.apartmentId);
+  if (overlay.type === 'apartments') return renderApartmentsManagerModal();
+  if (overlay.type === 'create-apartment') return renderCreateApartmentModal();
   if (overlay.type === 'preview-catalog') return renderPublicCatalogPreview();
   if (overlay.type === 'price-book') return renderPriceBookModal();
   return '';
@@ -69,7 +74,8 @@ function renderFinancialSummary(application) {
 
 function renderPaymentsSection(application,editable) {
   const payments=state().payments.filter(p=>p.applicationId===application.id).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
-  return `<div class="application-section-stack"><section class="detail-section">${renderFinancialSummary(application)}${editable?`<div class="payment-actions"><button class="button primary" data-action="add-payment" data-application-id="${application.id}">${icon('plus',18)}Подтвердить платёж</button><button class="button secondary" data-action="send-payment" data-application-id="${application.id}">${icon('share',18)}Запросить оплату</button></div>`:''}</section><section class="detail-section"><div class="section-head"><div><h3>История операций</h3><p>Чек сам по себе не увеличивает полученную сумму</p></div></div><div class="payments-list">${payments.map(payment=>`<div class="payment-item ${payment.amount<0?'refund':''}"><span class="payment-icon">${icon(payment.amount<0?'refresh':'wallet',18)}</span><div><strong>${payment.amount<0?'Возврат':'Платёж'} · ${escapeHtml(payment.method)}</strong><span>${payment.kind==='deposit'?'Депозит':'Аренда'}${payment.note?` · ${escapeHtml(payment.note)}`:''}</span><small>${new Date(payment.createdAt).toLocaleString('ru-RU')} · ${escapeHtml(userById(payment.createdBy)?.shortName||'')}</small></div><b>${payment.amount<0?'−':'+'}${formatMoney(Math.abs(payment.amount))}</b></div>`).join('')||renderEmptyState('wallet','Операций пока нет','Добавьте подтверждённый платёж после проверки поступления.')}</div></section></div>`;
+  const refundAction = isOwner() && application.paid > 0 ? `<button class="button danger ghost" data-action="add-refund" data-application-id="${application.id}">${icon('refresh',18)}Возврат</button>` : '';
+  return `<div class="application-section-stack"><section class="detail-section">${renderFinancialSummary(application)}${editable?`<div class="payment-actions"><button class="button primary" data-action="add-payment" data-application-id="${application.id}">${icon('plus',18)}Подтвердить платёж</button><button class="button secondary" data-action="send-payment" data-application-id="${application.id}">${icon('share',18)}Запросить оплату</button>${refundAction}</div>`:''}</section><section class="detail-section"><div class="section-head"><div><h3>История операций</h3><p>Чек сам по себе не увеличивает полученную сумму</p></div></div><div class="payments-list">${payments.map(payment=>`<div class="payment-item ${payment.amount<0?'refund':''}"><span class="payment-icon">${icon(payment.amount<0?'refresh':'wallet',18)}</span><div><strong>${payment.amount<0?'Возврат':'Платёж'} · ${escapeHtml(payment.method)}</strong><span>${payment.kind==='deposit'?'Депозит':'Аренда'}${payment.note?` · ${escapeHtml(payment.note)}`:''}</span><small>${new Date(payment.createdAt).toLocaleString('ru-RU')} · ${escapeHtml(userById(payment.createdBy)?.shortName||'')}</small></div><b>${payment.amount<0?'−':'+'}${formatMoney(Math.abs(payment.amount))}</b></div>`).join('')||renderEmptyState('wallet','Операций пока нет','Добавьте подтверждённый платёж после проверки поступления.')}</div></section></div>`;
 }
 
 function renderTimeline(application) {

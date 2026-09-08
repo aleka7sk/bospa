@@ -40,6 +40,7 @@ const runtimeSources = [
   'src/connectivity.js',
   'src/store.js',
   'src/icons.js',
+  'src/api.js',
 ].map(path => resolve(root, path));
 runtimeSources.push(...await sortedFiles(resolve(root, 'src/app-parts'), '.js', 'application parts'));
 

@@ -56,6 +56,7 @@ func (api *API) Handler() http.Handler {
 	mux.Handle("POST /api/v1/applications/{id}/claim", api.auth(api.csrf(http.HandlerFunc(api.handleClaimApplication))))
 	mux.Handle("PATCH /api/v1/applications/{id}/status", api.auth(api.csrf(http.HandlerFunc(api.handleUpdateStatus))))
 	mux.Handle("POST /api/v1/applications/{id}/comments", api.auth(api.csrf(http.HandlerFunc(api.handleAddComment))))
+	mux.Handle("POST /api/v1/applications/{id}/contacts", api.auth(api.csrf(http.HandlerFunc(api.handleAddContact))))
 	mux.Handle("POST /api/v1/applications/{id}/payments", api.auth(api.csrf(http.HandlerFunc(api.handleAddPayment))))
 	mux.Handle("POST /api/v1/applications/{id}/refunds", api.auth(api.csrf(api.requireRoles(RoleOwner, RoleSuperadmin)(http.HandlerFunc(api.handleAddRefund)))))
 

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Bospa API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     Multi-tenant API for Bospa. Monetary values are integer tiyn.
     Cookie-authenticated mutations require the X-CSRF-Token header.
@@ -98,6 +98,9 @@ paths:
                 properties:
                   user: {$ref: '#/components/schemas/User'}
                   workspace: {$ref: '#/components/schemas/Workspace'}
+                  users:
+                    type: array
+                    items: {$ref: '#/components/schemas/User'}
                   apartments:
                     type: array
                     items: {$ref: '#/components/schemas/Apartment'}
@@ -267,6 +270,26 @@ paths:
                 text: {type: string, minLength: 1, maxLength: 4000}
       responses:
         '201': {description: Comment created}
+  /applications/{id}/contacts:
+    post:
+      tags: [Applications]
+      operationId: recordApplicationContact
+      security: [{cookieAuth: [], csrfToken: []}]
+      parameters:
+        - {$ref: '#/components/parameters/ApplicationID'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateContact'}
+      responses:
+        '201':
+          description: Contact outcome recorded in the application timeline
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ApplicationEvent'}
+        '404': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
   /applications/{id}/payments:
     post:
       tags: [Applications]
@@ -468,9 +491,60 @@ components:
       type: object
       properties:
         application: {$ref: '#/components/schemas/Application'}
-        payments: {type: array, items: {type: object}}
-        comments: {type: array, items: {type: object}}
-        events: {type: array, items: {type: object}}
+        payments:
+          type: array
+          items: {$ref: '#/components/schemas/Payment'}
+        comments:
+          type: array
+          items: {$ref: '#/components/schemas/Comment'}
+        events:
+          type: array
+          items: {$ref: '#/components/schemas/ApplicationEvent'}
+    CreateContact:
+      type: object
+      required: [outcome]
+      properties:
+        outcome:
+          type: string
+          enum: [reached, no_answer, callback, thinking, declined]
+        note: {type: string, maxLength: 2000}
+        callbackAt:
+          type: [string, 'null']
+          format: date-time
+          description: Required when outcome is callback.
+    Payment:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        applicationId: {type: string, format: uuid}
+        amountTiyn: {type: integer, format: int64}
+        kind: {type: string, enum: [rent, deposit]}
+        method: {type: string}
+        status: {type: string}
+        note: {type: string}
+        receivedAt: {type: string, format: date-time}
+        createdAt: {type: string, format: date-time}
+        createdBy: {type: string, format: uuid}
+    Comment:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        applicationId: {type: string, format: uuid}
+        authorId: {type: string, format: uuid}
+        authorName: {type: string}
+        text: {type: string}
+        createdAt: {type: string, format: date-time}
+    ApplicationEvent:
+      type: object
+      properties:
+        id: {type: integer, format: int64}
+        applicationId: {type: string, format: uuid}
+        type: {type: string}
+        text: {type: string}
+        actorId: {type: [string, 'null'], format: uuid}
+        actorName: {type: string}
+        metadata: {type: object, additionalProperties: true}
+        createdAt: {type: string, format: date-time}
     APIErrorEnvelope:
       type: object
       properties:

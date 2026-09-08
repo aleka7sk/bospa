@@ -274,6 +274,27 @@ export function createStore(options = {}) {
       mutate('price:override', s => { s.priceOverrides.push({id:uid('rate'), apartmentId:input.apartmentId, start:input.start, end:input.end, price:Number(input.price), reason:input.reason || ''}); });
     },
     updateApartment(id, patch) { mutate('apartment:update', s => Object.assign(s.apartments.find(item => item.id === id), patch)); },
+    createApartment(input) {
+      let created;
+      mutate('apartment:create', s => {
+        const code = String(input.code || '').trim() || `APT-${String(s.apartments.length + 1).padStart(3, '0')}`;
+        created = {
+          id: uid('apt'), code,
+          complex: String(input.complex || input.address || '').trim(),
+          unit: String(input.unit || '').trim(), district: String(input.district || '').trim(),
+          address: String(input.address || '').trim(), city: String(input.city || 'Астана').trim(),
+          rooms: Number(input.rooms || 1), capacity: Number(input.capacity || 1),
+          weekdayRate: Number(input.weekdayRate || 0), weekendRate: Number(input.weekendRate || 0),
+          checkIn: input.checkInTime || '14:00', checkOut: input.checkOutTime || '12:00',
+          active: true, catalogEnabled: Boolean(input.catalogEnabled), published: Boolean(input.published),
+          features: ['Wi‑Fi', 'Кухня', 'Smart TV'],
+          description: 'Квартира из рабочего каталога bospa.',
+        };
+        created.photos = Array.from({length: 4}, (_, index) => apartmentArtwork(created, index));
+        s.apartments.push(created);
+      });
+      return created;
+    },
     addUser(input) {
       mutate('user:add', s => s.users.push({id:uid('user'), name:input.name, shortName:input.name.split(' ')[0], initials:input.name.split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase(), role:input.role || 'manager', active:true}));
     },

@@ -1,6 +1,7 @@
 import {store, STATUS, CONTACT_OUTCOMES, calculateBilling, calculateRate, calculateStayTotal, isHardApplication} from './store.js';
 import {mockRequestedEvent, toApplicationInput} from './connectivity.js';
 import {icon} from './icons.js';
+import {backend} from './api.js';
 import {addDays, apartmentArtwork, clamp, dateRange, dayDiff, downloadText, escapeHtml, formatDate, formatMoney, formatPeriod, formatPhone, fromDateKey, initials, isToday, isWeekend, nights, overlaps, relativeTime, toDateKey, uid} from './utils.js';
 
 const appRoot = document.querySelector('#app');
@@ -24,6 +25,8 @@ const ui = {
   catalogSearch: '',
   toast: null,
   installPrompt: null,
+  authError: '',
+  busy: false,
 };
 
 const labels = {
@@ -36,7 +39,7 @@ const softStatuses = new Set(['new','no_answer','thinking','awaiting_prepayment'
 const negativeStatuses = new Set(['declined','unpaid','cancelled_client','cancelled_company','duplicate','error']);
 
 function state() { return store.getState(); }
-function currentUser() { return state().users.find(user => user.id === state().session.userId); }
+function currentUser() { return state().users.find(user => user.id === state().session.userId) || state().users[0] || null; }
 function apartmentById(id) { return state().apartments.find(item => item.id === id); }
 function userById(id) { return state().users.find(item => item.id === id); }
 function applicationById(id) { return state().applications.find(item => item.id === id); }
@@ -94,6 +97,29 @@ function logoMarkup(compact = false) {
   return `<div class="brand${compact ? ' compact' : ''}"><span class="brand-mark">${icon('calendar', compact ? 18 : 22)}</span><span class="brand-word">bospa</span></div>`;
 }
 
+
+function renderBootScreen() {
+  return `<main class="boot-screen"><div class="boot-orb orb-a"></div><div class="boot-orb orb-b"></div><section class="boot-card"><div class="boot-logo">${logoMarkup()}</div><span class="boot-spinner" aria-hidden="true"></span><h1>Подготавливаем bospa</h1><p>Проверяем защищённую сессию и загружаем рабочий календарь.</p></section></main>`;
+}
+
+function renderLoginScreen() {
+  const local = ['localhost', '127.0.0.1'].includes(location.hostname);
+  const apiUnavailable = backend.available === false;
+  const error = ui.authError || (apiUnavailable ? backend.describeError(backend.error) : '');
+  return `<main class="auth-screen"><div class="auth-visual"><div class="auth-orb orb-a"></div><div class="auth-orb orb-b"></div><div class="auth-story"><div>${logoMarkup()}</div><span class="eyebrow">Rental operations · Kazakhstan</span><h1>Все квартиры, заявки и оплаты — в одном календаре.</h1><p>Рабочее пространство владельца и команды продаж без хаоса в чатах и таблицах.</p><div class="auth-points"><span>${icon('calendar',19)}Календарь занятости</span><span>${icon('users',19)}Прозрачная работа команды</span><span>${icon('wallet',19)}Подтверждённые платежи</span></div></div></div><section class="auth-panel"><div class="auth-panel-inner"><div class="auth-mobile-logo">${logoMarkup()}</div><span class="eyebrow">Защищённый вход</span><h2>Войти в bospa</h2><p>Одна активная сессия на персональный аккаунт.</p>${error ? `<div class="auth-alert ${apiUnavailable ? 'warning' : 'error'}">${icon(apiUnavailable ? 'alert' : 'close',18)}<span>${escapeHtml(error)}</span>${apiUnavailable ? `<button data-action="retry-api">Повторить</button>` : ''}</div>` : ''}<form data-form="login" class="auth-form"><label><span>Email</span><input type="email" name="email" autocomplete="username" value="${local ? 'owner@bospa.local' : ''}" placeholder="owner@company.kz" required/></label><label><span>Пароль</span><div class="password-field"><input type="password" name="password" autocomplete="current-password" placeholder="Введите пароль" required/><button type="button" data-action="toggle-password" aria-label="Показать пароль">${icon('eye',18)}</button></div></label><button class="button primary auth-submit" type="submit" ${ui.busy ? 'disabled' : ''}>${ui.busy ? '<span class="button-spinner"></span>Входим…' : 'Войти'}</button></form>${local ? `<div class="local-hint"><strong>Локальный Docker-профиль</strong><span>Пароль по умолчанию: <code>bospa-local-owner-2026!</code></span></div>` : ''}<div class="auth-divider"><span>или</span></div><button class="button secondary full" data-action="enter-demo">Открыть автономное демо</button><small class="auth-footnote">Демо хранит изменения только в этом браузере. Рабочий режим использует Go API и PostgreSQL.</small></div></section></main>`;
+}
+
+function renderOnboarding() {
+  const owner = currentUser()?.role === 'owner' || currentUser()?.role === 'superadmin';
+  return `<main class="onboarding-screen"><header class="onboarding-head">${logoMarkup()}<div><span>${escapeHtml(currentUser()?.shortName || '')}</span><button class="button tertiary small" data-action="logout">Выйти</button></div></header><section class="onboarding-card"><span class="onboarding-icon">${icon('building',34)}</span><span class="eyebrow">Первый запуск</span><h1>${owner ? 'Добавьте первую квартиру' : 'Workspace ещё настраивается'}</h1><p>${owner ? 'Календарь начнёт работать сразу после создания первой точки. Данные сохранятся в PostgreSQL.' : 'Владелец ещё не добавил квартиры. Обновите экран позже.'}</p>${owner ? `<div class="onboarding-steps"><div><b>1</b><span><strong>Квартира</strong><small>Адрес, номер и базовые цены</small></span></div><div><b>2</b><span><strong>Заявка</strong><small>Создайте вручную или через Test Center</small></span></div><div><b>3</b><span><strong>Оплата</strong><small>Проверьте полный рабочий flow</small></span></div></div><button class="button primary onboarding-cta" data-action="create-apartment">${icon('plus',19)}Добавить квартиру</button>` : `<button class="button primary onboarding-cta" data-action="refresh-server">${icon('refresh',19)}Обновить</button>`}<button class="text-button" data-action="enter-demo">Открыть демо с готовыми данными</button></section></main>`;
+}
+
+function connectionMarkup() {
+  if (backend.isDemo()) return `<span class="connection-pill demo">${icon('spark',14)}Демо</span>`;
+  const online = state().runtime?.online !== false;
+  return `<button class="connection-pill ${online ? 'online' : 'offline'}" data-action="refresh-server" title="${online ? 'Данные синхронизированы с сервером' : 'Показана последняя сохранённая копия'}">${icon(online ? 'check' : 'alert',14)}${online ? 'Онлайн' : 'Нет связи'}</button>`;
+}
+
 function navItems() {
   const role = currentUser()?.role;
   if (role === 'superadmin') return [
@@ -110,9 +136,10 @@ function navItems() {
 function renderSidebar() {
   const user = currentUser();
   const route = state().session.route;
+  const workspaceInitials = initials(state().workspace.name).slice(0, 2);
   return `<aside class="sidebar ${ui.sidebarOpen ? 'open' : ''}">
     <div class="sidebar-head">${logoMarkup()}<button class="icon-button sidebar-close" data-action="toggle-sidebar" aria-label="Закрыть меню">${icon('close')}</button></div>
-    <div class="workspace-chip"><span class="workspace-avatar">AA</span><span><strong>${escapeHtml(state().workspace.name)}</strong><small>${escapeHtml(state().workspace.city)} · ${state().apartments.filter(a=>a.active).length} квартир</small></span>${icon('chevronDown',16)}</div>
+    <div class="workspace-chip"><span class="workspace-avatar">${escapeHtml(workspaceInitials)}</span><span><strong>${escapeHtml(state().workspace.name)}</strong><small>${escapeHtml(state().workspace.city)} · ${state().apartments.filter(a=>a.active).length} квартир</small></span>${icon('chevronDown',16)}</div>
     <nav class="sidebar-nav">
       ${navItems().map(([key, navIcon, label]) => `<button class="nav-item ${route === key ? 'active' : ''}" data-route="${key}">${icon(navIcon,20)}<span>${label}</span>${key === 'applications' && attentionApplications().length ? `<b>${attentionApplications().length}</b>` : ''}</button>`).join('')}
     </nav>
@@ -130,6 +157,7 @@ function renderSidebar() {
 
 function renderTopbar() {
   const unread = state().notifications.filter(item => !item.read).length;
+  const user = currentUser();
   const route = state().session.route;
   const titles = {calendar:'Календарь',applications:'Заявки',my:'Мои заявки',analytics:'Аналитика',catalog:'Каталог квартир',more:'Управление',superadmin:'Bospa Platform'};
   return `<header class="topbar">
@@ -137,9 +165,10 @@ function renderTopbar() {
     <div class="mobile-brand">${logoMarkup(true)}</div>
     <div class="page-heading"><h1>${titles[route] || 'bospa'}</h1><span>${route === 'calendar' ? formatDate(new Date(), {month:'long', year:'numeric'}) : state().workspace.name}</span></div>
     <div class="topbar-actions">
+      ${connectionMarkup()}
       <label class="global-search">${icon('search',18)}<input type="search" data-input="global-search" value="${escapeHtml(ui.search)}" placeholder="Поиск квартиры, клиента, телефона…" /></label>
       <button class="icon-button" data-action="toggle-notifications" aria-label="Уведомления">${icon('bell',21)}${unread ? `<span class="notification-count">${unread}</span>` : ''}</button>
-      <button class="avatar-button" data-action="toggle-user-menu"><span class="avatar">${escapeHtml(currentUser().initials)}</span><span class="avatar-meta"><strong>${escapeHtml(currentUser().shortName)}</strong><small>${labels[currentUser().role]}</small></span>${icon('chevronDown',15)}</button>
+      <button class="avatar-button" data-action="toggle-user-menu"><span class="avatar">${escapeHtml(user?.initials || '—')}</span><span class="avatar-meta"><strong>${escapeHtml(user?.shortName || 'Пользователь')}</strong><small>${labels[user?.role] || ''}</small></span>${icon('chevronDown',15)}</button>
     </div>
   </header>`;
 }

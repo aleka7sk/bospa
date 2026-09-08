@@ -231,6 +231,7 @@ type ApplicationDetail struct {
 type Bootstrap struct {
 	User         User          `json:"user"`
 	Workspace    Workspace     `json:"workspace"`
+	Users        []User        `json:"users"`
 	Apartments   []Apartment   `json:"apartments"`
 	Applications []Application `json:"applications"`
 	ServerTime   time.Time     `json:"serverTime"`
@@ -341,6 +342,61 @@ type UpdateApplicationInput struct {
 	DepositAmountTiyn      *int64     `json:"depositAmountTiyn"`
 	PinnedNote             *string    `json:"pinnedNote"`
 	LockVersion            int64      `json:"lockVersion"`
+}
+
+type ContactOutcome string
+
+const (
+	ContactReached  ContactOutcome = "reached"
+	ContactNoAnswer ContactOutcome = "no_answer"
+	ContactCallback ContactOutcome = "callback"
+	ContactThinking ContactOutcome = "thinking"
+	ContactDeclined ContactOutcome = "declined"
+)
+
+func (outcome ContactOutcome) Valid() bool {
+	switch outcome {
+	case ContactReached, ContactNoAnswer, ContactCallback, ContactThinking, ContactDeclined:
+		return true
+	default:
+		return false
+	}
+}
+
+func (outcome ContactOutcome) Label() string {
+	switch outcome {
+	case ContactReached:
+		return "Дозвонился"
+	case ContactNoAnswer:
+		return "Не ответил"
+	case ContactCallback:
+		return "Перезвонить"
+	case ContactThinking:
+		return "Клиент думает"
+	case ContactDeclined:
+		return "Отказ"
+	default:
+		return string(outcome)
+	}
+}
+
+type CreateContactInput struct {
+	Outcome    ContactOutcome `json:"outcome"`
+	Note       string         `json:"note"`
+	CallbackAt *time.Time     `json:"callbackAt"`
+}
+
+func (in CreateContactInput) Validate() error {
+	if !in.Outcome.Valid() {
+		return fmt.Errorf("%w: contact outcome is invalid", ErrValidation)
+	}
+	if len(strings.TrimSpace(in.Note)) > 2000 {
+		return fmt.Errorf("%w: contact note is too long", ErrValidation)
+	}
+	if in.Outcome == ContactCallback && in.CallbackAt == nil {
+		return fmt.Errorf("%w: callbackAt is required", ErrValidation)
+	}
+	return nil
 }
 
 type CreateRefundInput struct {

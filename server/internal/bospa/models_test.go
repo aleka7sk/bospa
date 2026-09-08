@@ -38,3 +38,22 @@ func TestHardStatuses(t *testing.T) {
 		t.Fatal("new application must stay soft")
 	}
 }
+
+func TestCreateContactInputValidation(t *testing.T) {
+	t.Parallel()
+
+	callback := CreateContactInput{Outcome: ContactCallback}
+	if err := callback.Validate(); err == nil {
+		t.Fatal("callback contact must require callbackAt")
+	}
+
+	valid := CreateContactInput{Outcome: ContactReached, Note: "Клиент подтвердил даты"}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid contact rejected: %v", err)
+	}
+
+	invalid := CreateContactInput{Outcome: ContactOutcome("unknown")}
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("unknown contact outcome must be rejected")
+	}
+}

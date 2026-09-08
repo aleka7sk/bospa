@@ -1,63 +1,240 @@
 # bospa
 
-**bospa** — mobile-first PWA-календарь для команд посуточной аренды квартир в Казахстане. Приложение собрано по `PRD v0.10` и `Mobile Calendar & Application Card UX Specification v0.2`.
+**bospa** — mobile-first система управления ранними заявками, бронированиями, оплатами и календарём квартир для команд посуточной аренды в Казахстане.
 
-> Текущая ветка — функциональный продуктовый прототип. Он запускается без внешнего API и хранит демо-данные в браузере. Реальная авторизация, multi-tenant backend, платежи, object storage и Connectivity-партнёр требуют отдельного production-этапа.
+Репозиторий содержит единое приложение:
 
-## Что работает
+- устанавливаемую PWA для владельца и менеджеров;
+- Go HTTP API;
+- PostgreSQL-схему и встроенные миграции;
+- cookie-authentication, CSRF и изоляцию workspace;
+- Docker Compose для локального запуска полного контура;
+- provider-neutral контракт будущей интеграции с Booking/Connectivity-партнёром.
 
-- основной экран **Календарь** с закреплёнными датами и квартирами;
-- горизонтальная прокрутка в прошлое и будущее с динамическим расширением окна;
-- масштабы на 7, 4 и 2 дня;
-- ранние заявки, предоплата, полная оплата и технические блокировки;
-- две параллельные ранние заявки и компактный overflow для большего количества;
-- hard-conflict guard без owner override;
-- создание ручной заявки с автоматическим claim автора;
-- Test Center для имитации раннего Booking-события;
-- quick bottom sheet и полноэкранная карточка заявки;
-- звонок, WhatsApp, результаты контакта, комментарии и pinned note;
-- платежи, предоплата, остаток, депозит и возвратная модель в store;
-- сохранение проигравшей soft-заявки в состоянии «Нужна альтернатива»;
-- платный модуль каталога и публичный view-only preview;
-- персональная ссылка на подборку квартир на 24 часа;
-- Rate Calendar Lite и overrides на диапазон дат;
-- owner analytics, manager «Мои заявки» и superadmin price book;
-- component billing, счета, team management, CSV templates и экспорт;
-- role switcher для owner / manager / platform superadmin;
-- PWA manifest, service worker и offline app shell;
-- адаптивный UI для современных iPhone, Samsung, Xiaomi, Oppo и desktop.
+Текущая версия реализует рабочий ручной сценарий без реального Connectivity-партнёра. Внешние Booking-события проверяются через безопасный Test Center.
 
-## Быстрый запуск
+## Реализованный продуктовый контур
 
-Требуется Node.js 20+.
+### Календарь и заявки
+
+- календарь квартир с масштабами 7/4/2 дня;
+- горизонтальная прокрутка по датам и вертикальная по квартирам;
+- soft-заявки, предоплаченные и оплаченные бронирования;
+- несколько ранних заявок на один период;
+- очередь «Нужна альтернатива» после появления hard-брони;
+- серверный запрет пересечения `hard + hard` без owner override;
+- ручная заявка автоматически закрепляется за автором;
+- внешняя тестовая заявка остаётся свободной до нажатия «Взять в работу»;
+- карточка заявки, pinned note, комментарии, timeline и результаты контактов;
+- звонок и WhatsApp из карточки;
+- изменение клиента, квартиры и периода с optimistic locking;
+- завершение брони после checkout и полной оплаты.
+
+### Деньги
+
+- точная стоимость, индивидуальная предоплата, остаток и депозит;
+- несколько подтверждённых платежей;
+- Kaspi, перевод, наличные и другие ручные способы;
+- возвраты владельцем;
+- чек не считается оплатой без подтверждённой финансовой операции;
+- аналитика владельца и персональная аналитика менеджера.
+
+### Каталог, цены и управление
+
+- view-only каталог квартир без самостоятельного бронирования;
+- подбор альтернатив и персональная ссылка на 24 часа;
+- Rate Calendar Lite: будни, выходные и overrides по датам;
+- управление квартирами и командой;
+- component billing UX и superadmin price book;
+- универсальные CSV-шаблоны;
+- Test Center для partner-neutral событий;
+- PWA manifest, offline shell и адаптивный интерфейс.
+
+## Рекомендуемый запуск: полный контур
+
+Нужны Docker и Docker Compose.
 
 ```bash
 git checkout feat/bospa-pwa-v1
-git pull
+git pull --ff-only
+cp .env.example .env
+docker compose up --build
+```
+
+Откройте:
+
+```text
+http://localhost:4173
+```
+
+Локальная учётная запись по умолчанию:
+
+```text
+Email:    owner@bospa.local
+Пароль:   bospa-local-owner-2026!
+```
+
+Эти credentials предназначены только для локальной разработки. Перед любым внешним развёртыванием замените пароль через `.env` и используйте secrets manager.
+
+Сервисы:
+
+```text
+web        http://localhost:4173
+api        http://localhost:8080
+postgres   доступен только внутри compose network
+```
+
+Web-контейнер проксирует `/api/*` в API, поэтому cookies работают в same-origin режиме.
+
+Остановка:
+
+```bash
+docker compose down
+```
+
+Удаление локальной БД и полный сброс:
+
+```bash
+docker compose down -v
+```
+
+## Запуск без Docker
+
+### 1. API
+
+Поднимите PostgreSQL и задайте переменные окружения:
+
+```bash
+export BOSPA_DATABASE_URL='postgres://bospa:password@localhost:5432/bospa?sslmode=disable'
+export BOSPA_PUBLIC_ORIGIN='http://localhost:4173'
+export BOSPA_ALLOWED_ORIGINS='http://localhost:4173'
+export BOSPA_COOKIE_SECURE='false'
+export BOSPA_AUTO_MIGRATE='true'
+export BOSPA_BOOTSTRAP_OWNER_EMAIL='owner@bospa.local'
+export BOSPA_BOOTSTRAP_OWNER_PASSWORD='replace-with-a-local-password'
+export BOSPA_BOOTSTRAP_OWNER_NAME='Локальный владелец'
+export BOSPA_BOOTSTRAP_WORKSPACE='Bospa Local'
+
+cd server
+go run ./cmd/api
+```
+
+### 2. Web
+
+В другом терминале:
+
+```bash
 npm ci
 npm run dev
 ```
 
-Откройте `http://localhost:4173`.
+Откройте `http://localhost:4173`. Dev server проксирует `/api/*` на `http://localhost:8080`.
 
-`npm ci` может вывести `audited 1 package` — это нормально: прототип намеренно не использует внешние runtime-зависимости.
-
-Сборка статического PWA:
+Другой upstream можно задать так:
 
 ```bash
+BOSPA_API_UPSTREAM=http://127.0.0.1:9080 npm run dev
+```
+
+## Demo-only режим
+
+Для UX-проверки без PostgreSQL и Go API:
+
+```bash
+npm ci
+npm run dev:demo
+```
+
+На экране входа выберите **«Открыть демо без сервера»**. Изменения сохраняются только в `localStorage` текущего браузера.
+
+## Production build web
+
+```bash
+npm ci
 npm run build
 npm run preview
 ```
 
-Проверки:
+`npm run preview` повторно собирает приложение перед запуском, чтобы не раздавать устаревшую или пустую папку `dist`.
+
+## Проверки
+
+Web:
 
 ```bash
 npm run ci
 ```
 
-## Если после обновления виден пустой или старый экран
+API:
 
-Сначала остановите сервер и выполните чистый запуск:
+```bash
+cd server
+go mod tidy
+gofmt -w .
+go vet ./...
+go test -race -count=1 ./...
+go build ./cmd/api
+```
+
+GitHub Actions дополнительно поднимает PostgreSQL и проходит интеграционный flow:
+
+```text
+login → bootstrap → create application → contact → payment → prepaid
+```
+
+## Архитектура
+
+```text
+browser / installed PWA
+        │ same-origin /api
+        ▼
+web static server + reverse proxy
+        │
+        ▼
+Go API
+        │
+        ▼
+PostgreSQL
+```
+
+Основные каталоги:
+
+```text
+src/
+  api.js          server client, session restore and API/store mapping
+  app-parts/      UI, routes, forms and interaction flows
+  store.js        demo-mode domain store and local fallback
+  styles/         responsive design system
+server/
+  cmd/api/        API entry point
+  internal/bospa/ domain, HTTP, PostgreSQL store and migrations
+  openapi/        HTTP contract
+contracts/
+  connectivity/   future provider-neutral integration contract
+public/
+  manifest.webmanifest, service worker and icons
+```
+
+### Серверные гарантии
+
+- непрозрачная 256-bit session cookie с `HttpOnly`;
+- double-submit CSRF с серверной проверкой digest;
+- одна активная интерактивная сессия на пользователя;
+- bcrypt password hashing;
+- workspace scope в запросах к данным;
+- атомарный claim заявки;
+- PostgreSQL exclusion constraint для hard-конфликтов;
+- optimistic `lockVersion` для конкурентного редактирования;
+- audit log и неизменяемая timeline заявки;
+- деньги в API хранятся целым числом тиынов.
+
+## Поведение при недоступном API
+
+Если API временно пропал после входа, PWA сохраняет последний загруженный снимок для чтения и показывает offline-индикатор. Серверные изменения не имитируются локально. После восстановления сети используется ручное или периодическое обновление.
+
+Если API отсутствует до входа, пользователь может повторить подключение либо перейти в отдельный demo-only режим. Демо-данные никогда не отправляются в production API автоматически.
+
+## Если браузер показывает старую сборку
 
 ```bash
 rm -rf dist
@@ -65,78 +242,38 @@ npm ci
 npm run dev
 ```
 
-Затем откройте `http://localhost:4173` с hard reload. Если приложение уже устанавливалось как PWA, удалите старую установленную копию либо в DevTools откройте **Application → Service Workers → Unregister**, затем **Storage → Clear site data** и загрузите страницу снова. Service worker использует версионированный cache и network-first загрузку JS/CSS, поэтому после этой очистки старый bundle больше не должен оставаться активным.
+Затем выполните hard reload. Для ранее установленной PWA:
 
-## Демо-роли
+1. DevTools → **Application → Service Workers → Unregister**;
+2. **Application → Storage → Clear site data**;
+3. откройте приложение заново.
 
-Нажмите на аватар в верхней панели:
+## Что ещё не является production-ready
 
-- **Алишер** — владелец;
-- **Айгерим / Данияр / Алия** — менеджеры;
-- **Bospa Platform** — platform superadmin.
+- реальный Booking/Connectivity adapter;
+- загрузка фотографий и чеков в KZ object storage;
+- Web Push sender и realtime fan-out;
+- email/WhatsApp provider;
+- автоматизированный SaaS billing provider;
+- self-service приглашения и восстановление пароля;
+- deployment manifests, managed PostgreSQL, PITR и observability для production;
+- security review и legal review перед обработкой реальных персональных данных.
 
-Изменения сохраняются в `localStorage`. Сброс: `Ещё → Сбросить демо`.
+## API
 
-## Архитектура прототипа
+OpenAPI: [`server/openapi/openapi.yaml`](server/openapi/openapi.yaml)
+
+Health endpoints:
 
 ```text
-index.html
-src/
-  app-parts/   UI, маршруты, формы и interaction flows (собираются по порядку)
-  store.js     domain store, statuses, conflicts, payments, billing
-  connectivity.js provider-neutral adapter contract and mock mapping
-  data.js      deterministic demo workspace
-  utils.js     dates, money, CSV and artwork helpers
-  icons.js     dependency-free SVG icon set
-  styles/      responsive design system and mobile calendar
-contracts/
-  connectivity/v1alpha/ schemas and fixtures for future partners
-public/
-  manifest.webmanifest
-  sw.js
-  icons/
-docs/
-  PRD-v0.10.md
-  UX-SPEC-v0.2.md
+GET /api/v1/health/live
+GET /api/v1/health/ready
 ```
 
-Внешние UI-библиотеки и CDN не используются. Это сохраняет offline-работу и делает прототип простым для аудита.
+## Документы продукта
 
-## Важные инварианты
-
-1. `soft + soft` разрешено.
-2. `hard + hard` запрещено атомарной проверкой store.
-3. Тестовые заявки не блокируют production-календарь и не входят в реальные финансы.
-4. Чек не считается оплатой: сумму создаёт только подтверждённая операция.
-5. Все менеджеры видят полную карточку, но редактирует claim-holder или owner.
-6. Ручная заявка автоматически claim-ится автором.
-7. Каталог синхронизируется только с production hard-занятостью и не содержит booking CTA.
-
-## Что сознательно отложено
-
-- реальная интеграция Booking / Channex / Beds24;
-- production Go API и PostgreSQL;
-- полноценная аутентификация, сессии и tenant isolation;
-- серверные push и realtime;
-- загрузка чеков и фотографий в KZ object storage;
-- Kaspi API/deep-link integration;
-- автоматический CSV adapter RealtyCalendar;
-- billing provider и автоматическое списание.
-
-Контракты будущего partner adapter уже подготовлены в `contracts/connectivity/v1alpha` и не зависят от конкретного Connectivity-провайдера.
-
-## Docker
-
-```bash
-docker compose up --build
-```
-
-После запуска приложение доступно на `http://localhost:4173`.
-
-## Документы
-
-- [`docs/PRD-v0.10.md`](docs/PRD-v0.10.md)
-- [`docs/UX-SPEC-v0.2.md`](docs/UX-SPEC-v0.2.md)
+- `docs/PRD-v0.10.md`
+- `docs/UX-SPEC-v0.2.md`
 
 ## Лицензия
 
