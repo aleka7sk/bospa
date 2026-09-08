@@ -1,0 +1,103 @@
+name: fullstack-smoke
+on:
+  push:
+    branches: ["feat/bospa-pwa-v1"]
+  pull_request:
+    paths:
+      - "src/**"
+      - "scripts/**"
+      - "server/**"
+      - "compose.yaml"
+      - ".github/workflows/fullstack-smoke.yml"
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6-alpine
+        env:
+          POSTGRES_DB: bospa
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d bospa"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      BOSPA_DATABASE_URL: postgres://postgres:postgres@localhost:5432/bospa?sslmode=disable
+      BOSPA_PUBLIC_ORIGIN: http://localhost:4173
+      BOSPA_ALLOWED_ORIGINS: http://localhost:4173
+      BOSPA_COOKIE_SECURE: "false"
+      BOSPA_AUTO_MIGRATE: "true"
+      BOSPA_BOOTSTRAP_OWNER_EMAIL: owner@bospa.local
+      BOSPA_BOOTSTRAP_OWNER_PASSWORD: bospa-ci-owner-2026!
+      BOSPA_BOOTSTRAP_OWNER_NAME: CI Owner
+      BOSPA_BOOTSTRAP_WORKSPACE: CI Workspace
+      BOSPA_API_ORIGIN: http://127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.27.1
+          cache: false
+      - name: Build PWA
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+          grep -q '__BOSPA_REMOTE_RUNTIME__' dist/assets/app.js
+      - name: Start API and PWA proxy
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd server && go mod tidy && go run ./cmd/api) >/tmp/bospa-api.log 2>&1 &
+          echo $! >/tmp/bospa-api.pid
+          node scripts/dev-server.mjs dist 4173 >/tmp/bospa-web.log 2>&1 &
+          echo $! >/tmp/bospa-web.pid
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://localhost:4173/api/v1/health/ready >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/bospa-api.log
+          cat /tmp/bospa-web.log
+          exit 1
+      - name: Authenticate through web origin
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS http://localhost:4173/ | grep -q 'id="app"'
+          curl -fsS http://localhost:4173/assets/app.js | grep -q '__BOSPA_REMOTE_RUNTIME__'
+          curl -fsS -c /tmp/cookies.txt \
+            -H 'content-type: application/json' \
+            -d '{"email":"owner@bospa.local","password":"bospa-ci-owner-2026!"}' \
+            http://localhost:4173/api/v1/auth/login >/tmp/login.json
+          python - <<'PY'
+          import json
+          value=json.load(open('/tmp/login.json'))
+          assert value.get('csrfToken'), value
+          PY
+          curl -fsS -b /tmp/cookies.txt http://localhost:4173/api/v1/bootstrap >/tmp/bootstrap.json
+          python - <<'PY'
+          import json
+          value=json.load(open('/tmp/bootstrap.json'))
+          assert value, value
+          assert value.get('workspace') or value.get('data'), value
+          PY
+      - name: Logs on failure
+        if: failure()
+        run: |
+          cat /tmp/bospa-api.log 2>/dev/null || true
+          cat /tmp/bospa-web.log 2>/dev/null || true
+      - name: Stop services
+        if: always()
+        run: |
+          kill "$(cat /tmp/bospa-web.pid 2>/dev/null)" 2>/dev/null || true
+          kill "$(cat /tmp/bospa-api.pid 2>/dev/null)" 2>/dev/null || true
