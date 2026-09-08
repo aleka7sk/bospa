@@ -1,0 +1,40 @@
+name: fix-remote-datetime
+on:
+  push:
+    branches: ["feat/bospa-pwa-v1"]
+    paths: [.github/fix-remote-datetime.trigger]
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+      - name: Send RFC3339 timestamps to Go API
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path=Path('src/app-parts/00-remote-api-runtime.js')
+          source=path.read_text()
+          old="""          checkInAt:`${input.checkIn}T${input.checkInTime || '14:00'}:00`,
+                    checkOutAt:`${input.checkOut}T${input.checkOutTime || '12:00'}:00`,"""
+          new="""          checkInAt:new Date(`${input.checkIn}T${input.checkInTime || '14:00'}:00`).toISOString(),
+                    checkOutAt:new Date(`${input.checkOut}T${input.checkOutTime || '12:00'}:00`).toISOString(),"""
+          if old not in source:
+              raise SystemExit('expected datetime payload block not found')
+          path.write_text(source.replace(old,new,1))
+          PY
+          rm -f .github/fix-remote-datetime.trigger .github/workflows/fix-remote-datetime.yml
+          npm ci --ignore-scripts
+          npm run ci
+          git config user.name 'bospa automation'
+          git config user.email '94860628+aleka7sk@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'fix(web): serialize booking times as RFC3339'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
